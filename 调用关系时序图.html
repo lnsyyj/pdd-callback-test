@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>pdd-callback-test · 程序调用关系时序图</title>
+<style>
+  :root { --fg:#2C2C2A; --fg2:#5F5E5A; --line:#E3E1DA; --bg:#FBFBF9; }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:32px 20px 64px; background:var(--bg); color:var(--fg);
+         font-family:system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif; line-height:1.6; }
+  .wrap { max-width:760px; margin:0 auto; }
+  h1 { font-size:20px; font-weight:500; margin:0 0 6px; }
+  .sub { font-size:13px; color:var(--fg2); margin:0 0 28px; }
+  h2 { font-size:15px; font-weight:500; margin:36px 0 4px; padding-top:20px; border-top:1px solid var(--line); }
+  h2:first-of-type { border-top:none; padding-top:0; }
+  .cap { font-size:13px; color:var(--fg2); margin:0 0 14px; }
+  .card { background:#fff; border:1px solid var(--line); border-radius:12px; padding:12px 8px; }
+  ul { font-size:13px; color:var(--fg2); padding-left:20px; }
+  li { margin:4px 0; }
+  code { font-family:ui-monospace,Consolas,monospace; font-size:12px; background:#F1EFE8; padding:1px 4px; border-radius:4px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>pdd-callback-test · 程序调用关系时序图</h1>
+  <p class="sub">拼多多开放平台「企业 ERP」回调最小示例 · Go 标准库实现（server.go / pdd.go / store.go / config.go / main.go）</p>
+
+  <h2>一、站点间通信拓扑</h2>
+  <p class="cap">三方角色：商家浏览器（用户端）、本地服务（:8080 单进程，内含 Server / PddClient / Store）、拼多多开放平台（授权页 + API 网关）。跨站流量只有两条：浏览器 ↔ 授权页的页面跳转，本地服务 ↔ API 网关的接口调用。</p>
+  <div class="card">
+  <svg width="100%" viewBox="0 0 680 420" role="img" xmlns="http://www.w3.org/2000/svg" font-family="system-ui,-apple-system,'Segoe UI','Microsoft YaHei',sans-serif">
+  <defs>
+  <marker id="arrowTopo" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+  <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </marker>
+  </defs>
+  <rect x="40" y="40" width="150" height="56" rx="8" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
+  <text x="115" y="64" text-anchor="middle" font-size="13" font-weight="500" fill="#444441">商家浏览器</text>
+  <text x="115" y="82" text-anchor="middle" font-size="11" fill="#5F5E5A">商家 / 运营人员</text>
+  <rect x="430" y="40" width="210" height="56" rx="8" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/>
+  <text x="535" y="64" text-anchor="middle" font-size="13" font-weight="500" fill="#0C447C">PDD 授权页</text>
+  <text x="535" y="82" text-anchor="middle" font-size="11" fill="#185FA5">mms.pinduoduo.com/open.html</text>
+  <rect x="180" y="180" width="260" height="64" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+  <text x="310" y="204" text-anchor="middle" font-size="13" font-weight="500" fill="#3C3489">本地服务 · pdd-callback-test</text>
+  <text x="310" y="224" text-anchor="middle" font-size="11" fill="#534AB7">:8080 · Server / PddClient / Store</text>
+  <rect x="40" y="340" width="180" height="56" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+  <text x="130" y="364" text-anchor="middle" font-size="13" font-weight="500" fill="#3C3489">本地存储</text>
+  <text x="130" y="382" text-anchor="middle" font-size="11" fill="#534AB7">data/tokens.json</text>
+  <rect x="380" y="330" width="260" height="64" rx="8" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/>
+  <text x="510" y="354" text-anchor="middle" font-size="13" font-weight="500" fill="#0C447C">PDD API 网关</text>
+  <text x="510" y="374" text-anchor="middle" font-size="11" fill="#185FA5">gw-api.pinduoduo.com/api/router</text>
+  <line x1="190" y1="58" x2="424" y2="58" stroke="#5F5E5A" stroke-width="1" marker-end="url(#arrowTopo)"/>
+  <text x="310" y="50" text-anchor="middle" font-size="11" fill="#185FA5">① 浏览器跳转授权页</text>
+  <line x1="430" y1="84" x2="196" y2="84" stroke="#5F5E5A" stroke-width="1" marker-end="url(#arrowTopo)"/>
+  <text x="310" y="104" text-anchor="middle" font-size="11" fill="#185FA5">② 302 回跳 ?code=xxx&amp;state=yyy</text>
+  <line x1="105" y1="96" x2="220" y2="176" stroke="#5F5E5A" stroke-width="1" marker-end="url(#arrowTopo)"/>
+  <text x="315" y="126" text-anchor="middle" font-size="12" fill="#444441">③ 浏览器发起的 HTTP 请求</text>
+  <text x="315" y="144" text-anchor="middle" font-size="11" fill="#5F5E5A">GET /authorize、/callback、/orders</text>
+  <line x1="240" y1="244" x2="174" y2="336" stroke="#5F5E5A" stroke-width="1" marker-end="url(#arrowTopo)"/>
+  <text x="170" y="292" text-anchor="end" font-size="12" fill="#444441">④ 读写本地文件</text>
+  <text x="170" y="308" text-anchor="end" font-size="11" fill="#5F5E5A">data/tokens.json</text>
+  <line x1="380" y1="244" x2="470" y2="328" stroke="#5F5E5A" stroke-width="1" marker-end="url(#arrowTopo)"/>
+  <text x="372" y="292" text-anchor="end" font-size="12" fill="#444441">⑤ POST 表单 + MD5 签名</text>
+  <line x1="520" y1="330" x2="420" y2="246" stroke="#5F5E5A" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#arrowTopo)"/>
+  <text x="494" y="302" text-anchor="start" font-size="12" fill="#444441">⑥ JSON 响应</text>
+  </svg>
+  </div>
+
+  <h2>二、启动初始化调用时序</h2>
+  <p class="cap">纯本地顺序调用，无网络参与。main() 先读配置（loadConfig 会补全空字段默认值），再依次构造 TokenStore、PddClient、Server，最后注册路由并阻塞监听。</p>
+  <div class="card">
+  <svg width="100%" viewBox="0 0 680 424" role="img" xmlns="http://www.w3.org/2000/svg" font-family="system-ui,-apple-system,'Segoe UI','Microsoft YaHei',sans-serif">
+  <defs>
+  <marker id="arrowBoot" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+  <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </marker>
+  </defs>
+  <rect x="44" y="40" width="112" height="48" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+  <text x="100" y="62" text-anchor="middle" font-size="12" font-weight="500" fill="#3C3489">main.go</text>
+  <text x="100" y="78" text-anchor="middle" font-size="11" fill="#534AB7">main()</text>
+  <rect x="164" y="40" width="112" height="48" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+  <text x="220" y="62" text-anchor="middle" font-size="12" font-weight="500" fill="#3C3489">config.go</text>
+  <text x="220" y="78" text-anchor="middle" font-size="11" fill="#534AB7">loadConfig()</text>
+  <rect x="284" y="40" width="112" height="48" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+  <text x="340" y="62" text-anchor="middle" font-size="12" font-weight="500" fill="#3C3489">store.go</text>
+  <text x="340" y="78" text-anchor="middle" font-size="11" fill="#534AB7">NewTokenStore()</text>
+  <rect x="404" y="40" width="112" height="48" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+  <text x="460" y="62" text-anchor="middle" font-size="12" font-weight="500" fill="#3C3489">pdd.go</text>
+  <text x="460" y="78" text-anchor="middle" font-size="11" fill="#534AB7">NewPddClient()</text>
+  <rect x="524" y="40" width="112" height="48" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+  <text x="580" y="62" text-anchor="middle" font-size="12" font-weight="500" fill="#3C3489">server.go</text>
+  <text x="580" y="78" text-anchor="middle" font-size="11" fill="#534AB7">NewServer()</text>
+  <line x1="100" y1="88" x2="100" y2="404" stroke="#B4B2A9" stroke-width="1" stroke-dasharray="3 4"/>
+  <line x1="220" y1="88" x2="220" y2="404" stroke="#B4B2A9" stroke-width="1" stroke-dasharray="3 4"/>
+  <line x1="340" y1="88" x2="340" y2="404" stroke="#B4B2A9" stroke-width="1" stroke-dasharray="3 4"/>
+  <line x1="460" y1="88" x2="460" y2="404" stroke="#B4B2A9" stroke-width="1" stroke-dasharray="3 4"/>
+  <line x1="580" y1="88" x2="580" y2="404" stroke="#B4B2A9" stroke-width="1" stroke-dasharray="3 4"/>
+  <text x="160" y="104" text-anchor="middle" font-size="11" fill="#444441">① loadConfig("config.json")</text>
+  <line x1="100" y1="112" x2="214" y2="112" stroke="#5F5E5A" stroke-width="1" marker-end="url(#arrowBoot)"/>
+  <text x="160" y="138" text-anchor="middle" font-size="11" fill="#5F5E5A">② 返回 *Config（补默认值）</text>
+  <line x1="220" y1="146" x2="106" y2="146" stroke="#5F5E5A" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#arrowBoot)"/>
+  <text x="220" y="172" text-anchor="middle" font-size="11" fill="#444441">③ NewTokenStore(cfg.TokenStoreFile)</text>
+  <line x1="100" y1="180" x2="334" y2="180" stroke="#5F5E5A" stroke-width="1" marker-end="url(#arrowBoot)"/>
+  <path d="M340 214 h22 v14 h-22" fill="none" stroke="#5F5E5A" stroke-width="1" marker-end="url(#arrowBoot)"/>
+  <text x="372" y="228" text-anchor="start" font-size="11" fill="#5F5E5A">④ 读取 data/tokens.json</text>
+  <text x="280" y="240" text-anchor="middle" font-size="11" fill="#444441">⑤ NewPddClient(client_id, secret, gateway)</text>
+  <line x1="100" y1="248" x2="454" y2="248" stroke="#5F5E5A" stroke-width="1" marker-end="url(#arrowBoot)"/>
+  <text x="340" y="274" text-anchor="middle" font-size="11" fill="#444441">⑥ NewServer(cfg, pdd, tokens)</text>
+  <line x1="100" y1="282" x2="574" y2="282" stroke="#5F5E5A" stroke-width="1" marker-end="url(#arrowBoot)"/>
+  <text x="340" y="308" text-anchor="middle" font-size="11" fill="#5F5E5A">⑦ 返回 *Server（含 callbackPath）</text>
+  <line x1="580" y1="316" x2="106" y2="316" stroke="#5F5E5A" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#arrowBoot)"/>
+  <text x="340" y="342" text-anchor="middle" font-size="11" fill="#444441">⑧ srv.routes() 注册 7 条路由</text>
+  <line x1="100" y1="350" x2="574" y2="350" stroke="#5F5E5A" stroke-width="1" marker-end="url(#arrowBoot)"/>
+  <text x="340" y="376" text-anchor="middle" font-size="11" fill="#444441">⑨ http.ListenAndServe(":8080", mux)</text>
+  <line x1="100" y1="384" x2="574" y2="384" stroke="#5F5E5A" stroke-width="1" marker-end="url(#arrowBoot)"/>
+  </svg>
+  </div>
+
+  <h2>三、商家授权回调（跨站）时序</h2>
+  <p class="cap">全链路涉及三个站点。关键点：state 由本地生成、内存存放、回调时一次性消费（Consume 即删除，防重放）；code 只能用一次，换来 token 后立即写入 data/tokens.json。授权页只在浏览器侧流转，本地服务不直接访问 mms.pinduoduo.com。</p>
+  <div class="card">
+  <svg width="100%" viewBox="0 0 680 564" role="img" xmlns="http://www.w3.org/2000/svg" font-family="system-ui,-apple-system,'Segoe UI','Microsoft YaHei',sans-serif">
+  <defs>
+  <marker id="arrowOauth" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+  <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </marker>
+  </defs>
+  <rect x="41" y="40" width="118" height="48" rx="8" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
+  <text x="100" y="62" text-anchor="middle" font-size="12" font-weight="500" fill="#444441">商家浏览器</text>
+  <text x="100" y="78" text-anchor="middle" font-size="11" fill="#5F5E5A">商家端</text>
+  <rect x="161" y="40" width="118" height="48" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+  <text x="220" y="62" text-anchor="middle" font-size="12" font-weight="500" fill="#3C3489">本地 Server</text>
+  <text x="220" y="78" text-anchor="middle" font-size="11" fill="#534AB7">:8080</text>
+  <rect x="281" y="40" width="118" height="48" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+  <text x="340" y="62" text-anchor="middle" font-size="12" font-weight="500" fill="#3C3489">PddClient</text>
+  <text x="340" y="78" text-anchor="middle" font-size="11" fill="#534AB7">doRequest / sign</text>
+  <rect x="401" y="40" width="118" height="48" rx="8" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/>
+  <text x="460" y="62" text-anchor="middle" font-size="12" font-weight="500" fill="#0C447C">PDD 授权页</text>
+  <text x="460" y="78" text-anchor="middle" font-size="11" fill="#185FA5">mms.pinduoduo.com</text>
+  <rect x="521" y="40" width="118" height="48" rx="8" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/>
+  <text x="580" y="62" text-anchor="middle" font-size="12" font-weight="500" fill="#0C447C">PDD 网关</text>
+  <text x="580" y="78" text-anchor="middle" font-size="11" fill="#185FA5">gw-api.pinduoduo.com</text>
+  <line x1="100" y1="88" x2="100" y2="544" stroke="#B4B2A9" stroke-width="1" stroke-dasharray="3 4"/>
+  <line x1="220" y1="88" x2="220" y2="544" stroke="#B4B2A9" stroke-width="1" stroke-dasharray="3 4"/>
+  <line x1="340" y1="88" x2="340" y2="544" stroke="#B4B2A9" stroke-width="1" stroke-dasharray="3 4"/>
+  <line x1="460" y1="88" x2="460" y2="544" stroke="#B4B2A9" stroke-width="1" stroke-dasharray="3 4"/>
+  <line x1="580" y1="88" x2="580" y2="544" stroke="#B4B2A9" stroke-width="1" stroke-dasharray="3 4"/>
+  <text x="160" y="108" text-anchor="middle" font-size="11" fill="#444441">① GET /authorize</text>
+  <line x1="100" y1="116" x2="214" y2="116" stroke="#5F5E5A" stroke-width="1" marker-end="url(#arrowOauth)"/>
+  <path d="M220 150 h22 v14 h-22" fill="none" stroke="#5F5E5A" stroke-width="1" marker-end="url(#arrowOauth)"/>
+  <text x="248" y="162" text-anchor="start" font-size="11" fill="#5F5E5A">② randomState() + Put(state, 10m)</text>
+  <text x="160" y="176" text-anchor="middle" font-size="11" fill="#444441">③ 302 → mms.pinduoduo.com</text>
+  <line x1="220" y1="184" x2="106" y2="184" stroke="#5F5E5A" stroke-width="1" marker-end="url(#arrowOauth)"/>
+  <text x="280" y="210" text-anchor="middle" font-size="11" fill="#444441">④ 打开授权页并同意授权</text>
+  <line x1="100" y1="218" x2="454" y2="218" stroke="#5F5E5A" stroke-width="1" marker-end="url(#arrowOauth)"/>
+  <text x="280" y="244" text-anchor="middle" font-size="11" fill="#444441">⑤ 302 回跳 ?code=xxx&amp;state=yyy</text>
+  <line x1="460" y1="252" x2="106" y2="252" stroke="#5F5E5A" stroke-width="1" marker-end="url(#arrowOauth)"/>
+  <text x="160" y="278" text-anchor="middle" font-size="11" fill="#444441">⑥ GET /callback?code&amp;state</text>
+  <line x1="100" y1="286" x2="214" y2="286" stroke="#5F5E5A" stroke-width="1" marker-end="url(#arrowOauth)"/>
+  <path d="M220 320 h22 v14 h-22" fill="none" stroke="#5F5E5A" stroke-width="1" marker-end="url(#arrowOauth)"/>
+  <text x="248" y="332" text-anchor="start" font-size="11" fill="#5F5E5A">⑦ Consume(state) 校验并删除</text>
+  <text x="280" y="346" text-anchor="middle" font-size="11" fill="#444441">⑧ ExchangeToken(code)</text>
+  <line x1="220" y1="354" x2="334" y2="354" stroke="#5F5E5A" stroke-width="1" marker-end="url(#arrowOauth)"/>
+  <text x="460" y="380" text-anchor="middle" font-size="11" fill="#444441">⑨ POST type=pdd.pop.auth.token.create + sign</text>
+  <line x1="340" y1="388" x2="574" y2="388" stroke="#5F5E5A" stroke-width="1" marker-end="url(#arrowOauth)"/>
+  <text x="460" y="414" text-anchor="middle" font-size="11" fill="#5F5E5A">⑩ 返回 token 字段的 JSON</text>
+  <line x1="580" y1="422" x2="346" y2="422" stroke="#5F5E5A" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#arrowOauth)"/>
+  <text x="280" y="448" text-anchor="middle" font-size="11" fill="#5F5E5A">⑪ *Token</text>
+  <line x1="340" y1="456" x2="226" y2="456" stroke="#5F5E5A" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#arrowOauth)"/>
+  <path d="M220 490 h22 v14 h-22" fill="none" stroke="#5F5E5A" stroke-width="1" marker-end="url(#arrowOauth)"/>
+  <text x="248" y="502" text-anchor="start" font-size="11" fill="#5F5E5A">⑫ tokens.Save(rec) → data/tokens.json</text>
+  <text x="160" y="516" text-anchor="middle" font-size="11" fill="#444441">⑬ 302 /success?owner_id=xxx</text>
+  <line x1="220" y1="524" x2="106" y2="524" stroke="#5F5E5A" stroke-width="1" marker-end="url(#arrowOauth)"/>
+  </svg>
+  </div>
+
+  <h2>四、订单查询与 Token 刷新时序</h2>
+  <p class="cap">alt 分支表示「临近过期才刷新」：<code>ExpiresAt() - now ≤ 300s</code> 才走 ④~⑧，否则直接跳到 ⑨。刷新与查询共用同一个网关入口，仅 <code>type</code> 不同（token.refresh / order.list.get）。</p>
+  <div class="card">
+  <svg width="100%" viewBox="0 0 680 612" role="img" xmlns="http://www.w3.org/2000/svg" font-family="system-ui,-apple-system,'Segoe UI','Microsoft YaHei',sans-serif">
+  <defs>
+  <marker id="arrowOrder" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+  <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </marker>
+  </defs>
+  <rect x="41" y="40" width="118" height="48" rx="8" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
+  <text x="100" y="62" text-anchor="middle" font-size="12" font-weight="500" fill="#444441">商家浏览器</text>
+  <text x="100" y="78" text-anchor="middle" font-size="11" fill="#5F5E5A">GET /orders</text>
+  <rect x="161" y="40" width="118" height="48" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+  <text x="220" y="62" text-anchor="middle" font-size="12" font-weight="500" fill="#3C3489">本地 Server</text>
+  <text x="220" y="78" text-anchor="middle" font-size="11" fill="#534AB7">handleOrders()</text>
+  <rect x="281" y="40" width="118" height="48" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+  <text x="340" y="62" text-anchor="middle" font-size="12" font-weight="500" fill="#3C3489">本地存储</text>
+  <text x="340" y="78" text-anchor="middle" font-size="11" fill="#534AB7">data/tokens.json</text>
+  <rect x="401" y="40" width="118" height="48" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+  <text x="460" y="62" text-anchor="middle" font-size="12" font-weight="500" fill="#3C3489">PddClient</text>
+  <text x="460" y="78" text-anchor="middle" font-size="11" fill="#534AB7">doRequest / sign</text>
+  <rect x="521" y="40" width="118" height="48" rx="8" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/>
+  <text x="580" y="62" text-anchor="middle" font-size="12" font-weight="500" fill="#0C447C">PDD 网关</text>
+  <text x="580" y="78" text-anchor="middle" font-size="11" fill="#185FA5">gw-api.pinduoduo.com</text>
+  <line x1="100" y1="88" x2="100" y2="592" stroke="#B4B2A9" stroke-width="1" stroke-dasharray="3 4"/>
+  <line x1="220" y1="88" x2="220" y2="592" stroke="#B4B2A9" stroke-width="1" stroke-dasharray="3 4"/>
+  <line x1="340" y1="88" x2="340" y2="592" stroke="#B4B2A9" stroke-width="1" stroke-dasharray="3 4"/>
+  <line x1="460" y1="88" x2="460" y2="592" stroke="#B4B2A9" stroke-width="1" stroke-dasharray="3 4"/>
+  <line x1="580" y1="88" x2="580" y2="592" stroke="#B4B2A9" stroke-width="1" stroke-dasharray="3 4"/>
+  <text x="160" y="108" text-anchor="middle" font-size="11" fill="#444441">① GET /orders?owner_id=xxx</text>
+  <line x1="100" y1="116" x2="214" y2="116" stroke="#5F5E5A" stroke-width="1" marker-end="url(#arrowOrder)"/>
+  <text x="280" y="142" text-anchor="middle" font-size="11" fill="#444441">② tokens.Get(owner_id)</text>
+  <line x1="220" y1="150" x2="334" y2="150" stroke="#5F5E5A" stroke-width="1" marker-end="url(#arrowOrder)"/>
+  <text x="280" y="176" text-anchor="middle" font-size="11" fill="#5F5E5A">③ TokenRecord（或 404）</text>
+  <line x1="340" y1="184" x2="226" y2="184" stroke="#5F5E5A" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#arrowOrder)"/>
+  <rect x="40" y="200" width="600" height="168" rx="8" fill="none" stroke="#888780" stroke-width="0.5"/>
+  <text x="52" y="218" text-anchor="start" font-size="12" font-weight="500" fill="#444441">alt</text>
+  <text x="80" y="218" text-anchor="start" font-size="11" fill="#5F5E5A">[ ExpiresAt() − now ≤ 300s 需刷新 ]</text>
+  <text x="340" y="230" text-anchor="middle" font-size="11" fill="#444441">④ RefreshToken(refresh_token)</text>
+  <line x1="220" y1="238" x2="454" y2="238" stroke="#5F5E5A" stroke-width="1" marker-end="url(#arrowOrder)"/>
+  <text x="520" y="258" text-anchor="middle" font-size="11" fill="#444441">⑤ POST 表单 + MD5 签名</text>
+  <text x="520" y="272" text-anchor="middle" font-size="11" fill="#5F5E5A">type=pdd.pop.auth.token.refresh</text>
+  <line x1="460" y1="282" x2="574" y2="282" stroke="#5F5E5A" stroke-width="1" marker-end="url(#arrowOrder)"/>
+  <text x="520" y="308" text-anchor="middle" font-size="11" fill="#5F5E5A">⑥ 新 token 的 JSON</text>
+  <line x1="580" y1="316" x2="466" y2="316" stroke="#5F5E5A" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#arrowOrder)"/>
+  <text x="280" y="342" text-anchor="middle" font-size="11" fill="#5F5E5A">⑦ *Token</text>
+  <line x1="460" y1="350" x2="226" y2="350" stroke="#5F5E5A" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#arrowOrder)"/>
+  <text x="280" y="398" text-anchor="middle" font-size="11" fill="#444441">⑧ Save(rec) 覆盖落库</text>
+  <line x1="220" y1="406" x2="334" y2="406" stroke="#5F5E5A" stroke-width="1" marker-end="url(#arrowOrder)"/>
+  <text x="340" y="432" text-anchor="middle" font-size="11" fill="#444441">⑨ OrderList(access_token, page, page_size)</text>
+  <line x1="220" y1="440" x2="454" y2="440" stroke="#5F5E5A" stroke-width="1" marker-end="url(#arrowOrder)"/>
+  <text x="520" y="460" text-anchor="middle" font-size="11" fill="#444441">⑩ POST 表单 + MD5 签名</text>
+  <text x="520" y="474" text-anchor="middle" font-size="11" fill="#5F5E5A">type=pdd.order.list.get</text>
+  <line x1="460" y1="484" x2="574" y2="484" stroke="#5F5E5A" stroke-width="1" marker-end="url(#arrowOrder)"/>
+  <text x="520" y="510" text-anchor="middle" font-size="11" fill="#5F5E5A">⑪ order_list / total_count</text>
+  <line x1="580" y1="518" x2="466" y2="518" stroke="#5F5E5A" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#arrowOrder)"/>
+  <text x="340" y="544" text-anchor="middle" font-size="11" fill="#5F5E5A">⑫ []Order, total</text>
+  <line x1="460" y1="552" x2="226" y2="552" stroke="#5F5E5A" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#arrowOrder)"/>
+  <text x="160" y="578" text-anchor="middle" font-size="11" fill="#444441">⑬ 200 JSON {owner_id, total, orders}</text>
+  <line x1="220" y1="586" x2="106" y2="586" stroke="#5F5E5A" stroke-width="1" marker-end="url(#arrowOrder)"/>
+  </svg>
+  </div>
+
+  <h2>说明</h2>
+  <ul>
+    <li>实线箭头为调用/请求，虚线箭头为返回值。</li>
+    <li>所有外发请求都走 <code>PddClient.doRequest</code>，统一做参数拼装 + MD5 大写签名（<code>sign()</code>，跳过空值），10s 超时。</li>
+    <li>网关返回若含 <code>error_response</code> 字段，会被直接当错误抛出。</li>
+    <li><code>state</code> 存内存（<code>StateStore</code>，10 分钟 TTL），<code>token</code> 落盘（<code>data/tokens.json</code>，0600 权限）。示例为明文存储，生产需加密 + Redis/Session。</li>
+  </ul>
+</div>
+</body>
+</html>
