@@ -1,0 +1,15 @@
+{
+  "server": {
+    "host": "0.0.0.0",
+    "port": 8080
+  },
+  "pdd": {
+    "client_id": "填写你的 client_id",
+    "client_secret": "填写你的 client_secret",
+    "redirect_uri": "http://localhost:8080/pdd/oauth/callback",
+    "gateway": "https://gw-api.pinduoduo.com/api/router",
+    "auth_url": "https://mms.pinduoduo.com/open.html"
+  },
+  "token_store_file": "data/tokens.json",
+  "log_level": "info"
+}
