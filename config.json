@@ -4,8 +4,8 @@
     "port": 8080
   },
   "pdd": {
-    "client_id": "70050cb7ca7d413aba25466f8404274d",
-    "client_secret": "d2a5b1d4815f3c56497dd545f796f6ec873eb152",
+    "client_id": "",
+    "client_secret": "",
     "redirect_uri": "http://pdd.zmdsdyy.com/pdd/auth/callback",
     "gateway": "https://gw-api.pinduoduo.com/api/router",
     "auth_url": "https://mms.pinduoduo.com/open.html"
