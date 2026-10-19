@@ -119,6 +119,9 @@ pdd-callback-test/
 ## 五、代码约定
 
 - **中文**写注释、文档、提交信息。
+- **每个函数必须有 Go doc 注释**（紧贴 `func` 上方，以函数名开头），至少说清四件事：
+  作用是什么、参数含义、返回值含义、有什么副作用（网络请求 / 写文件 / 加锁）。
+  返回 error 的还要列出错误场景。改函数行为时**同步改注释**，别让注释骗人。
 - 所有外发请求必须走 `PddClient.doRequest`，不要另起 `http.Post` —— 签名、超时（10s）、`error_response` 判定都在里面统一处理。
 - 新增拼多多接口：在 `pdd.go` 加方法，复用 `doRequest`，只传不同的 `type` 与业务参数。
 - 新增 HTTP 接口：在 `server.go` 的 `routes()` 注册，handler 命名 `handleXxx`，**同步更新 `使用文档.md` 第 7 节**。
